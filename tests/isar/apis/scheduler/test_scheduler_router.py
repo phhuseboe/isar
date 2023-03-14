@@ -61,7 +61,7 @@ class TestStartMissionByID:
         response = client.post(url=f"{self.schedule_start_mission_path}/1")
         assert response.status_code == HTTPStatus.CONFLICT
         assert response.json() == {
-            "detail": "Conflict - Mission already in progress - State: monitor"
+            "detail": "Conflict - Mission already in progress - State: States.Monitor"
         }
 
     @mock.patch.object(SchedulingUtilities, "get_state", mock_return_idle)
@@ -130,7 +130,7 @@ class TestStartMission:
         )
         assert response.status_code == HTTPStatus.CONFLICT
         assert response.json() == {
-            "detail": "Conflict - Mission already in progress - State: monitor"
+            "detail": "Conflict - Mission already in progress - State: States.Monitor"
         }
 
     @mock.patch.object(SchedulingUtilities, "get_state", mock_return_idle)
@@ -176,7 +176,7 @@ class TestPauseMission:
         response = client.post(url=self.schedule_pause_mission_path)
         assert response.status_code == HTTPStatus.CONFLICT
         assert response.json() == {
-            "detail": "Conflict - Pause command received in invalid state - State: idle"
+            "detail": "Conflict - Pause command received in invalid state - State: States.Idle"
         }
 
     @mock.patch.object(SchedulingUtilities, "get_state", mock_return_monitor)
@@ -206,7 +206,7 @@ class TestResumeMission:
         response = client.post(url=self.schedule_resume_mission_path)
         assert response.status_code == HTTPStatus.CONFLICT
         assert response.json() == {
-            "detail": "Conflict - Resume command received in invalid state - State: idle"
+            "detail": "Conflict - Resume command received in invalid state - State: States.Idle"
         }
 
     @mock.patch.object(SchedulingUtilities, "get_state", mock_return_paused)
@@ -290,5 +290,5 @@ class TestDriveTo:
         response = client.post(url=self.schedule_drive_to_path, data=self.mock_data)
         assert response.status_code == HTTPStatus.CONFLICT
         assert response.json() == {
-            "detail": "Conflict - Mission already in progress - State: monitor"
+            "detail": "Conflict - Mission already in progress - State: States.Monitor"
         }
