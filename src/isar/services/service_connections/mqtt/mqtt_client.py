@@ -1,7 +1,5 @@
-import json
 import logging
 import os
-from datetime import datetime
 from queue import Empty, Queue
 
 import backoff
@@ -10,7 +8,25 @@ from paho.mqtt.client import Client
 
 from isar.config.settings import settings
 from robot_interface.telemetry.mqtt_client import MqttClientInterface
-from robot_interface.utilities.json_service import EnhancedJSONEncoder
+
+
+def _on_success(data: dict) -> None:
+    logging.getLogger("mqtt_client").info("Connected to MQTT Broker")
+    logging.getLogger("mqtt_client").debug(
+        f"Elapsed time: {data['elapsed']}, Tries: {data['tries']}"
+    )
+
+
+def _on_backoff(data: dict) -> None:
+    logging.getLogger("mqtt_client").warning(
+        f"Failed to connect, retrying in {data['wait']} seconds"
+    )
+
+
+def _on_giveup(data: dict) -> None:
+    logging.getLogger("mqtt_client").error(
+        "Failed to connect to MQTT Broker within set backoff strategy."
+    )
 
 
 class MqttClient(MqttClientInterface):
@@ -55,21 +71,6 @@ class MqttClient(MqttClientInterface):
     def run(self) -> None:
         self.connect(host=self.host, port=self.port)
         self.client.loop_start()
-        payload: str = json.dumps(
-            {
-                "robot_id": settings.ROBOT_ID,
-                "host": settings.API_HOST,
-                "port": settings.API_PORT,
-                "timestamp": datetime.utcnow(),
-            },
-            cls=EnhancedJSONEncoder,
-        )
-
-        self.publish(
-            topic=settings.TOPIC_ISAR_ROBOT,
-            payload=payload,
-            retain=True,
-        )
 
         while True:
             if not self.client.is_connected():
@@ -87,25 +88,6 @@ class MqttClient(MqttClientInterface):
     def on_disconnect(self, client, userdata, rc):
         if rc != 0:
             self.logger.warning("Unexpected disconnection from MQTT Broker")
-
-    @staticmethod
-    def _on_success(data: dict) -> None:
-        logging.getLogger("mqtt_client").info("Connected to MQTT Broker")
-        logging.getLogger("mqtt_client").debug(
-            f"Elapsed time: {data['elapsed']}, Tries: {data['tries']}"
-        )
-
-    @staticmethod
-    def _on_backoff(data: dict) -> None:
-        logging.getLogger("mqtt_client").warning(
-            f"Failed to connect, retrying in {data['wait']} seconds"
-        )
-
-    @staticmethod
-    def _on_giveup(data: dict) -> None:
-        logging.getLogger("mqtt_client").error(
-            "Failed to connect to MQTT Broker within set backoff strategy."
-        )
 
     @backoff.on_exception(
         backoff.expo,

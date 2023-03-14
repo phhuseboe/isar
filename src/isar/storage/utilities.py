@@ -1,9 +1,12 @@
 import json
+import logging
 from pathlib import Path
 from typing import Any, Tuple
 from uuid import UUID
 
 from isar.models.mission_metadata.mission_metadata import MissionMetadata
+from isar.storage.storage_interface import StorageException
+from robot_interface.models.inspection import ThermalVideo, Video
 from robot_interface.models.inspection.inspection import Image, Inspection, ThermalImage
 from robot_interface.utilities.json_service import EnhancedJSONEncoder
 
@@ -11,12 +14,10 @@ from robot_interface.utilities.json_service import EnhancedJSONEncoder
 def construct_local_paths(
     inspection: Inspection, metadata: MissionMetadata
 ) -> Tuple[Path, Path]:
-    inspection_type: str = get_inspection_type(inspection=inspection)
-
     folder: Path = Path(str(metadata.mission_id))
     filename: str = get_filename(
         mission_id=metadata.mission_id,
-        inspection_type=inspection_type,
+        inspection_type=type(inspection).__name__,
         inspection_id=inspection.id,
     )
 
@@ -52,12 +53,12 @@ def construct_metadata_file(
                     {
                         "file_name": filename,
                         "timestamp": inspection.metadata.start_time,
-                        "x": inspection.metadata.time_indexed_pose.pose.position.x,
-                        "y": inspection.metadata.time_indexed_pose.pose.position.y,
-                        "z": inspection.metadata.time_indexed_pose.pose.position.z,
+                        "x": inspection.metadata.pose.position.x,
+                        "y": inspection.metadata.pose.position.y,
+                        "z": inspection.metadata.pose.position.z,
                         "tag": inspection.metadata.tag_id,
                         "additional_media_metadata": {
-                            "orientation": inspection.metadata.time_indexed_pose.pose.orientation.to_quat_array()  # noqa: E501
+                            "orientation": inspection.metadata.pose.orientation.to_quat_array()  # noqa: E501
                         },
                     }
                 ],
@@ -74,14 +75,3 @@ def get_filename(
     inspection_id: UUID,
 ) -> str:
     return f"{mission_id}_{inspection_type}_{inspection_id}"
-
-
-def get_inspection_type(inspection: Inspection) -> str:
-    if isinstance(inspection, Image):
-        return "image"
-    elif isinstance(inspection, ThermalImage):
-        return "thermal"
-    else:
-        raise TypeError(
-            f"Inspection must be either Image or ThermalImage. Got {type(inspection)}"
-        )

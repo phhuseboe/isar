@@ -7,10 +7,11 @@ from datetime import datetime
 from typing import Deque, List, Optional
 
 from alitra import Pose
-from injector import Injector, inject
+from injector import inject
 from transitions import Machine
 from transitions.core import State
 
+from isar.apis.models.models import ControlMissionResponse
 from isar.config.settings import settings
 from isar.mission_planner.task_selector_interface import (
     TaskSelectorInterface,
@@ -96,15 +97,15 @@ class StateMachine(object):
             self.paused_state,
         ]
 
-        self.machine = Machine(
-            self,
-            states=self.states,
-            initial="off",
-            queued=True,
-        )
-
+        self.machine = Machine(self, states=self.states, initial="off", queued=True)
         self.machine.add_transitions(
             [
+                {
+                    "trigger": "start_machine",
+                    "source": self.off_state,
+                    "dest": self.idle_state,
+                    "before": self._off,
+                },
                 {
                     "trigger": "step_initiated",
                     "source": self.initiate_step_state,
@@ -242,18 +243,40 @@ class StateMachine(object):
     def _pause(self) -> None:
         return
 
+    def _off(self) -> None:
+        return
+
     def _resume(self) -> None:
         self.logger.info(f"Resuming mission: {self.current_mission.id}")
         self.current_mission.status = MissionStatus.InProgress
         self.current_task.status = TaskStatus.InProgress
         self.publish_mission_status()
         self.publish_task_status()
-        self.queues.resume_mission.output.put(True)
+
+        resume_mission_response: ControlMissionResponse = (
+            self._make_control_mission_response()
+        )
+        self.queues.resume_mission.output.put(resume_mission_response)
+
         self.current_task.reset_task()
         self.update_current_step()
 
     def _mission_finished(self) -> None:
-        self.current_mission.status = MissionStatus.Completed
+        fail_statuses: List[TaskStatus] = [
+            TaskStatus.Cancelled,
+            TaskStatus.Failed,
+        ]
+        partially_fail_statuses = fail_statuses + [TaskStatus.PartiallySuccessful]
+
+        if all(task.status in fail_statuses for task in self.current_mission.tasks):
+            self.current_mission.status = MissionStatus.Failed
+        elif any(
+            task.status in partially_fail_statuses
+            for task in self.current_mission.tasks
+        ):
+            self.current_mission.status = MissionStatus.PartiallySuccessful
+        else:
+            self.current_mission.status = MissionStatus.Successful
         self._finalize()
 
     def _mission_started(self) -> None:
@@ -266,10 +289,15 @@ class StateMachine(object):
 
     def _mission_paused(self) -> None:
         self.logger.info(f"Pausing mission: {self.current_mission.id}")
-        self.queues.pause_mission.output.put(True)
         self.current_mission.status = MissionStatus.Paused
         self.current_task.status = TaskStatus.Paused
         self.current_step.status = StepStatus.NotStarted
+
+        paused_mission_response: ControlMissionResponse = (
+            self._make_control_mission_response()
+        )
+        self.queues.pause_mission.output.put(paused_mission_response)
+
         self.publish_mission_status()
         self.publish_task_status()
         self.publish_step_status()
@@ -279,8 +307,10 @@ class StateMachine(object):
 
     def _initiate_step_failed(self) -> None:
         self.current_step.status = StepStatus.Failed
+        self.current_task.update_task_status()
         self.current_mission.status = MissionStatus.Failed
         self.publish_step_status()
+        self.publish_task_status()
         self._finalize()
 
     def _step_infeasible(self) -> None:
@@ -290,7 +320,6 @@ class StateMachine(object):
         self.update_current_step()
 
     def _mission_stopped(self) -> None:
-        self.queues.stop_mission.output.put(True)
         self.current_mission.status = MissionStatus.Cancelled
         for task in self.current_mission.tasks:
             for step in task.steps:
@@ -302,6 +331,12 @@ class StateMachine(object):
                 TaskStatus.Paused,
             ]:
                 task.status = TaskStatus.Cancelled
+
+        stopped_mission_response: ControlMissionResponse = (
+            self._make_control_mission_response()
+        )
+        self.queues.stop_mission.output.put(stopped_mission_response)
+
         self.publish_task_status()
         self.publish_step_status()
         self._finalize()
@@ -330,6 +365,7 @@ class StateMachine(object):
 
     def update_current_task(self):
         if self.current_task.is_finished():
+            self.current_task.update_task_status()
             self.publish_task_status()
             try:
                 self.current_task = self.task_selector.next_task()
@@ -356,6 +392,7 @@ class StateMachine(object):
         self.current_step = None
         self.current_task = None
         self.current_mission = None
+        self.initial_pose = None
 
     def start_mission(self, mission: Mission, initial_pose: Pose):
         """Starts a scheduled mission."""
@@ -471,7 +508,7 @@ class StateMachine(object):
         self.mqtt_publisher.publish(
             topic=settings.TOPIC_ISAR_STATE,
             payload=payload,
-            retain=True,
+            retain=False,
         )
 
     def _log_state_transition(self, next_state):
@@ -494,8 +531,17 @@ class StateMachine(object):
 
         self.logger.info(f"Mission overview:\n{log_statement}")
 
+    def _make_control_mission_response(self) -> ControlMissionResponse:
+        return ControlMissionResponse(
+            mission_id=self.current_mission.id,
+            mission_status=self.current_mission.status,
+            task_id=self.current_task.id,
+            task_status=self.current_task.status,
+            step_id=self.current_step.id,
+            step_status=self.current_step.status,
+        )
 
-def main(injector: Injector):
+
+def main(state_machine: StateMachine):
     """Starts a state machine instance."""
-    state_machine = injector.get(StateMachine)
     state_machine.begin()

@@ -1,17 +1,11 @@
-from abc import abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, List, Literal, Optional, Type, Union
 from uuid import UUID, uuid4
 
 from alitra import Pose, Position
 
-from robot_interface.models.inspection.inspection import (
-    Image,
-    Inspection,
-    ThermalImage,
-    ThermalVideo,
-    Video,
-)
+from robot_interface.models.inspection import Image, ThermalImage, ThermalVideo, Video
+from robot_interface.models.inspection.inspection import Inspection
 from robot_interface.models.mission.status import StepStatus
 
 
@@ -24,7 +18,7 @@ class Step:
     id: UUID = field(default_factory=uuid4, init=False)
     status: StepStatus = field(default=StepStatus.NotStarted, init=False)
 
-    def __str__(self):
+    def __str__(self) -> str:
         def add_indent(text: str) -> str:
             return "".join("  " + line for line in text.splitlines(True))
 
@@ -64,12 +58,12 @@ class InspectionStep(Step):
     inspections: List[Inspection] = field(default_factory=list, init=False)
     tag_id: Optional[str] = field(default=None, init=False)
     type = "inspection_type"
+    analysis: Optional[List] = field(default_factory=list, init=False)
+    metadata: Optional[dict] = field(default_factory=dict, init=False)
 
     @staticmethod
     def get_inspection_type() -> Type[Inspection]:
         return Inspection
-
-    pass
 
 
 @dataclass

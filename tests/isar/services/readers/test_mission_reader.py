@@ -4,7 +4,7 @@ import pytest
 from alitra import Frame, Orientation, Pose, Position
 
 from isar.config.settings import settings
-from isar.mission_planner.mission_planner_interface import MissionPlannerError
+from isar.mission_planner.mission_planner_interface import MissionNotFoundError
 from isar.models.mission import Mission, Task
 from robot_interface.models.mission import TakeThermalImage
 from robot_interface.models.mission.step import DriveToPose, Step, TakeImage
@@ -17,12 +17,12 @@ from robot_interface.models.mission.step import DriveToPose, Step, TakeImage
         Path("./tests/test_data/test_mission_working.json"),
     ],
 )
-def test_get_mission(mission_reader, mission_path):
+def test_get_mission(mission_reader, mission_path) -> None:
     output: Mission = mission_reader.read_mission_from_file(mission_path)
     assert isinstance(output, Mission)
 
 
-def test_read_mission_from_file(mission_reader):
+def test_read_mission_from_file(mission_reader) -> None:
     expected_step_1 = DriveToPose(
         pose=Pose(
             position=Position(-2, -2, 0, Frame("asset")),
@@ -78,8 +78,8 @@ def test_read_mission_from_file(mission_reader):
         expected_mission.metadata.data_classification
         == mission.metadata.data_classification
     )
-    for (expected_task, task) in zip(expected_tasks, mission.tasks):
-        for (expected_step, step) in zip(expected_task.steps, task.steps):
+    for expected_task, task in zip(expected_tasks, mission.tasks):
+        for expected_step, step in zip(expected_task.steps, task.steps):
             if isinstance(expected_step, DriveToPose) and isinstance(step, DriveToPose):
                 assert expected_step.pose == step.pose
             if isinstance(expected_step, TakeImage) and isinstance(step, TakeImage):
@@ -93,22 +93,22 @@ def test_read_mission_from_file(mission_reader):
         (Path("./tests/test_data/test_mission_not_working.json")),
     ],
 )
-def test_get_invalid_mission(mission_reader, mission_path):
+def test_get_invalid_mission(mission_reader, mission_path) -> None:
     with pytest.raises(Exception):
         mission_reader.read_mission_from_file(mission_path)
 
 
-def test_get_mission_by_id(mission_reader):
+def test_get_mission_by_id(mission_reader) -> None:
     output = mission_reader.get_mission(1)
     assert isinstance(output, Mission)
 
 
-def test_get_mission_by_invalid_id(mission_reader):
-    with pytest.raises(MissionPlannerError):
+def test_get_mission_by_invalid_id(mission_reader) -> None:
+    with pytest.raises(MissionNotFoundError):
         mission_reader.get_mission(12345)
 
 
-def test_valid_predefined_missions_files(mission_reader):
+def test_valid_predefined_missions_files(mission_reader) -> None:
     # Checks that the predefined mission folder contains only valid missions!
     mission_list_dict = mission_reader.get_predefined_missions()
     predefined_mission_folder = Path(settings.PREDEFINED_MISSIONS_FOLDER)
@@ -121,7 +121,7 @@ def test_valid_predefined_missions_files(mission_reader):
         assert mission is not None
 
 
-def test_thermal_image_step(mission_reader):
+def test_thermal_image_step(mission_reader) -> None:
     mission_path: Path = Path("./tests/test_data/test_thermal_image_mission.json")
     output: Mission = mission_reader.read_mission_from_file(mission_path)
 

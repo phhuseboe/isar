@@ -10,9 +10,9 @@ from robot_interface.models.inspection.inspection import (
     Image,
     ImageMetadata,
     Inspection,
-    TimeIndexedPose,
 )
 from robot_interface.models.mission import InspectionStep, Step, StepStatus
+from robot_interface.models.mission.status import RobotStatus
 from robot_interface.robot_interface import RobotInterface
 
 
@@ -27,11 +27,13 @@ class MockRobot(RobotInterface):
             orientation=Orientation(x=0, y=0, z=0, w=1, frame=Frame("robot")),
             frame=Frame("robot"),
         ),
+        robot_status: RobotStatus = RobotStatus.Available,
     ):
         self.initiate_step_return_value: bool = initiate_step
         self.step_status_return_value: StepStatus = step_status
         self.stop_return_value: bool = stop
         self.robot_pose_return_value: Pose = pose
+        self.robot_status_return_value: RobotStatus = robot_status
 
     def initiate_step(self, step: Step) -> None:
         return
@@ -53,17 +55,17 @@ class MockRobot(RobotInterface):
     def get_telemetry_publishers(self, queue: Queue, robot_id: str) -> List[Thread]:
         return []
 
+    def robot_status(self) -> RobotStatus:
+        return self.robot_status_return_value
+
 
 def mock_image_metadata() -> ImageMetadata:
     return ImageMetadata(
         datetime.now(),
-        TimeIndexedPose(
-            Pose(
-                Position(0, 0, 0, Frame("robot")),
-                Orientation(0, 0, 0, 1, Frame("robot")),
-                Frame("robot"),
-            ),
-            datetime.now(),
+        Pose(
+            Position(0, 0, 0, Frame("robot")),
+            Orientation(0, 0, 0, 1, Frame("robot")),
+            Frame("robot"),
         ),
         file_type="jpg",
     )

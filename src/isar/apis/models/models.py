@@ -21,6 +21,23 @@ class StartMissionResponse(BaseModel):
     tasks: List[TaskResponse]
 
 
+class ControlMissionResponse(BaseModel):
+    mission_id: Union[UUID, int, str, None]
+    mission_status: str
+    task_id: Union[UUID, int, str, None]
+    task_status: str
+    step_id: Union[UUID, int, str, None]
+    step_status: str
+
+
+class RobotInfoResponse(BaseModel):
+    robot_package: str
+    robot_id: str
+    robot_capabilities: List[str]
+    robot_map_name: str
+    plant_short_name: str
+
+
 # We need to specify our own position/orientation/pose classes that do not contain
 # the "Frame" class because of a bug in generating the OpenAPI specification:
 # https://github.com/tiangolo/fastapi/issues/1505 This does not happen if all the

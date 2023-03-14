@@ -2,7 +2,7 @@ import logging
 from importlib import import_module
 from logging import Logger
 from types import ModuleType
-from typing import List, Union
+from typing import Dict, List, Tuple, Union
 
 from injector import Injector, Module, multiprovider, provider, singleton
 
@@ -36,17 +36,17 @@ class APIModule(Module):
         self,
         authenticator: Authenticator,
         scheduling_controller: SchedulingController,
+        keyvault: Keyvault,
     ) -> API:
-        return API(authenticator, scheduling_controller)
+        return API(authenticator, scheduling_controller, keyvault)
 
     @provider
     @singleton
     def provide_scheduling_controller(
         self,
-        mission_planner: MissionPlannerInterface,
         scheduling_utilities: SchedulingUtilities,
     ) -> SchedulingController:
-        return SchedulingController(mission_planner, scheduling_utilities)
+        return SchedulingController(scheduling_utilities)
 
 
 class AuthenticationModule(Module):
@@ -144,15 +144,17 @@ class StateMachineModule(Module):
 class UtilitiesModule(Module):
     @provider
     @singleton
-    def provide_scheduling_utilities(self, queues: Queues) -> SchedulingUtilities:
-        return SchedulingUtilities(queues)
+    def provide_scheduling_utilities(
+        self, queues: Queues, mission_planner: MissionPlannerInterface
+    ) -> SchedulingUtilities:
+        return SchedulingUtilities(queues, mission_planner)
 
 
 class ServiceModule(Module):
     @provider
     @singleton
     def provide_keyvault(self) -> Keyvault:
-        return Keyvault(keyvault_name=settings.KEYVAULT)
+        return Keyvault(keyvault_name=settings.KEYVAULT_NAME)
 
     @provider
     @singleton
@@ -176,12 +178,13 @@ class SequentialTaskSelectorModule(Module):
         return SequentialTaskSelector()
 
 
-modules: dict[str, tuple[Module, Union[str, bool]]] = {
+modules: Dict[str, Tuple[Module, Union[str, bool]]] = {
     "api": (APIModule, "required"),
     "authentication": (AuthenticationModule, "required"),
     "queues": (QueuesModule, "required"),
     "request_handler": (RequestHandlerModule, "required"),
-    "robot": (RobotModule, settings.ROBOT_PACKAGE),
+    "robot_package": (RobotModule, settings.ROBOT_PACKAGE),
+    "robot_id": (RobotModule, settings.ROBOT_ID),
     "mission_planner": (
         {
             "default": LocalPlannerModule,

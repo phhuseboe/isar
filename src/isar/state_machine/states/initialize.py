@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import Callable, Optional, TYPE_CHECKING
 
 from injector import inject
 from transitions import State
@@ -17,23 +17,23 @@ if TYPE_CHECKING:
 
 class Initialize(State):
     @inject
-    def __init__(self, state_machine: "StateMachine"):
+    def __init__(self, state_machine: "StateMachine") -> None:
         super().__init__(name="initialize", on_enter=self.start, on_exit=self.stop)
         self.state_machine: "StateMachine" = state_machine
 
         self.logger = logging.getLogger("state_machine")
         self.initialize_thread: Optional[ThreadedRequest] = None
 
-    def start(self):
+    def start(self) -> None:
         self.state_machine.update_state()
         self._run()
 
-    def stop(self):
+    def stop(self) -> None:
         if self.initialize_thread:
             self.initialize_thread.wait_for_thread()
         self.initialize_thread = None
 
-    def _run(self):
+    def _run(self) -> None:
         transition: Callable
         while True:
             if not self.initialize_thread:
@@ -41,7 +41,8 @@ class Initialize(State):
                     self.state_machine.robot.initialize
                 )
                 self.initialize_thread.start_thread(
-                    self.state_machine.get_initialize_params()
+                    self.state_machine.get_initialize_params(),
+                    name="State Machine Initialize Robot",
                 )
 
             try:
@@ -51,9 +52,9 @@ class Initialize(State):
                 continue
             except RobotException as e:
                 self.logger.error(f"Initialization of robot failed. Error: {e}")
-                transition = self.state_machine.initialization_failed
+                transition = self.state_machine.initialization_failed  # type: ignore
                 break
 
-            transition = self.state_machine.initialization_successful
+            transition = self.state_machine.initialization_successful  # type: ignore
             break
         transition()

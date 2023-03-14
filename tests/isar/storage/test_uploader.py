@@ -12,22 +12,15 @@ from isar.models.mission import Mission
 from isar.models.mission_metadata.mission_metadata import MissionMetadata
 from isar.storage.storage_interface import StorageInterface
 from isar.storage.uploader import Uploader
-from robot_interface.models.inspection.inspection import (
-    ImageMetadata,
-    Inspection,
-    TimeIndexedPose,
-)
+from robot_interface.models.inspection.inspection import ImageMetadata, Inspection
 
 MISSION_ID = "some-mission-id"
 ARBITRARY_IMAGE_METADATA = ImageMetadata(
     datetime.now(),
-    TimeIndexedPose(
-        Pose(
-            Position(0, 0, 0, Frame("asset")),
-            Orientation(x=0, y=0, z=0, w=1, frame=Frame("asset")),
-            Frame("asset"),
-        ),
-        datetime.now(),
+    Pose(
+        Position(0, 0, 0, Frame("asset")),
+        Orientation(x=0, y=0, z=0, w=1, frame=Frame("asset")),
+        Frame("asset"),
     ),
     file_type="jpg",
 )
@@ -51,7 +44,7 @@ def uploader_thread(injector) -> UploaderThread:
     return UploaderThread(injector=injector)
 
 
-def test_should_upload_from_queue(uploader_thread):
+def test_should_upload_from_queue(uploader_thread) -> None:
     mission: Mission = Mission([])
     inspection: Inspection = Inspection(ARBITRARY_IMAGE_METADATA)
     message: Tuple[Inspection, MissionMetadata] = (
@@ -63,7 +56,7 @@ def test_should_upload_from_queue(uploader_thread):
     assert uploader_thread.uploader.storage_handlers[0].blob_exists(inspection)
 
 
-def test_should_retry_failed_upload_from_queue(uploader_thread, mocker):
+def test_should_retry_failed_upload_from_queue(uploader_thread, mocker) -> None:
     mission: Mission = Mission([])
     inspection: Inspection = Inspection(ARBITRARY_IMAGE_METADATA)
     message: Tuple[Inspection, MissionMetadata] = (

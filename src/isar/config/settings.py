@@ -1,7 +1,13 @@
 import importlib.resources as pkg_resources
+import os
 from typing import List
 
+from dotenv import load_dotenv
 from pydantic import BaseSettings, Field, validator
+
+from isar.config import predefined_missions
+from robot_interface.models.robots.robot_model import RobotModel
+from robot_interface.telemetry.payloads import VideoStream
 
 
 class Settings(BaseSettings):
@@ -20,12 +26,11 @@ class Settings(BaseSettings):
 
     # Sleep time for while loops in the finite state machine in seconds
     # The sleep is used to throttle the system on every iteration in the loop
-    FSM_SLEEP_TIME: int = Field(default=0.1)
+    FSM_SLEEP_TIME: float = Field(default=0.1)
 
     # Location of JSON files containing predefined missions for the Local Planner to use
-    PREDEFINED_MISSIONS_FOLDER: str = Field(
-        default="src/isar/config/predefined_missions/"
-    )
+    path = os.path.dirname(predefined_missions.__file__)
+    PREDEFINED_MISSIONS_FOLDER: str = Field(default=path + "/")
 
     # Name of default map transformation
     DEFAULT_MAP: str = Field(default="default_map")
@@ -48,8 +53,13 @@ class Settings(BaseSettings):
     # Number of attempts to stop the robot before giving up
     UPLOAD_FAILURE_MAX_WAIT: int = Field(default=60)
 
+    # ISAR telemetry intervals
+    ROBOT_STATUS_PUBLISH_INTERVAL: int = Field(default=1)
+    ROBOT_INFO_PUBLISH_INTERVAL: int = Field(default=5)
+    ROBOT_API_STATUS_POLL_INTERVAL: int = Field(default=5)
+
     # FastAPI host
-    API_HOST: str = Field(default="0.0.0.0")
+    API_HOST_VIEWED_EXTERNALLY: str = Field(default="0.0.0.0")
 
     # FastAPI port
     API_PORT: int = Field(default=3000)
@@ -91,11 +101,15 @@ class Settings(BaseSettings):
     # Tenant ID for the Azure tenant with your Azure Active Directory application
     AZURE_TENANT_ID: str = Field(default="3aa4a235-b6e2-48d5-9195-7fcf05b459b0")
 
-    # Client ID for the API client
-    APP_CLIENT_ID: str = Field(default="68cca82d-84e7-495c-96b4-4c32509f2a46")
-
-    # Client ID for the OpenAPI client
-    OPENAPI_CLIENT_ID: str = Field(default="5f412c20-8c36-4c69-898f-d2b5051f5fb6")
+    # Client ID for ISAR
+    AZURE_CLIENT_ID: str = Field(default="fd384acd-5c1b-4c44-a1ac-d41d720ed0fe")
+    # If AZURE_CLIENT_ID is set as an environment variable, overwrite this despite missing prefix.
+    # This is done to avoid double config of ISAR_AZURE_CLIENT_ID and AZURE_CLIENT_ID.
+    # We need the latter as an environment variable for the EnvironmentCredential method for AzureAD.
+    azure_client_id_name: str = "AZURE_CLIENT_ID"
+    if os.environ.get(azure_client_id_name) is not None:
+        print("Using environment variable for AZURE_CLIENT_ID")
+        AZURE_CLIENT_ID = os.environ[azure_client_id_name]
 
     # MQTT username
     # The username and password is set by the MQTT broker and must be known in advance
@@ -110,7 +124,7 @@ class Settings(BaseSettings):
     MQTT_PORT: int = Field(default=1883)
 
     # Keyvault name
-    KEYVAULT: str = Field(default="EqRobotKeyVault")
+    KEYVAULT_NAME: str = Field(default="IsarDevKv")
 
     # URL to storage account for Azure Blob Storage
     BLOB_STORAGE_ACCOUNT_URL: str = Field(
@@ -142,14 +156,14 @@ class Settings(BaseSettings):
     ECHO_API_URL: str = Field(default="https://echohubapi.equinor.com/api")
 
     # Client ID for SLIMM App Registration
-    SLIMM_CLIENT_ID: str = Field(default="94c048cc-58e9-4570-85c0-4028c50ab6f3")
+    SLIMM_CLIENT_ID: str = Field(default="c630ca4d-d8d6-45ab-8cc6-68a363d0de9e")
 
     # Scope for access to SLIMM Ingestion API
     SLIMM_APP_SCOPE: str = Field(default=".default")
 
     # URL for SLIMM endpoint
     SLIMM_API_URL: str = Field(
-        default="https://slimmingestapitest.azurewebsites.net/SpatialIngest"
+        default="https://scinspectioningestapitest.azurewebsites.net/Ingest"
     )
 
     # Whether the results should be copied directly into the SLIMM datalake or only the
@@ -177,6 +191,25 @@ class Settings(BaseSettings):
     # Name or unique ID of robot
     ROBOT_ID: str = Field(default="R2-D2")
 
+    # Serial number of the robot ISAR is connected to
+    SERIAL_NUMBER: str = Field(default="0001")
+
+    # Endpoints to reach video streams for the robot
+    VIDEO_STREAMS: List[VideoStream] = Field(
+        default=[
+            VideoStream(
+                name="Front camera",
+                url="http://localhost:5000/videostream/front",
+                type="turtlebot",
+            ),
+            VideoStream(
+                name="Rear camera",
+                url="http://localhost:5000/videostream/rear",
+                type="turtlebot",
+            ),
+        ]
+    )
+
     # Data scheme the robot should adhere to
     # Options [DS0001]
     DATA_SCHEME: str = Field(default="DS0001")
@@ -201,47 +234,60 @@ class Settings(BaseSettings):
     DATA_CLASSIFICATION: str = Field(default="internal")
 
     # List of MQTT Topics
-
-    TOPIC_ISAR_ROBOT: str = Field(default="robot")
-
     TOPIC_ISAR_STATE: str = Field(default="state")
-
     TOPIC_ISAR_MISSION: str = Field(default="mission")
-
     TOPIC_ISAR_TASK: str = Field(default="task")
-
     TOPIC_ISAR_STEP: str = Field(default="step")
+    TOPIC_ISAR_ROBOT_STATUS: str = Field(default="robot_status")
+    TOPIC_ISAR_ROBOT_INFO: str = Field(default="robot_info")
 
+    # Logging
+
+    #   Log handlers
+    # Determines which log handlers are used by ISAR
+    # Multiple log handlers can be chosen
+    # Each handler will be called when logging
+    # Selecting a different log handler than local may require certain access rights:
+    #    - The Azure AI logger requires the 'APPLICATIONINSIGHTS_CONNECTION_STRING' to be set as an environment variable.
+    LOG_HANDLER_LOCAL_ENABLED: bool = Field(default=True)
+    LOG_HANDLER_APPLICATION_INSIGHTS_ENABLED: bool = Field(default=False)
+
+    #   Log levels
     API_LOG_LEVEL: str = Field(default="INFO")
+    MAIN_LOG_LEVEL: str = Field(default="INFO")
+    MQTT_LOG_LEVEL: str = Field(default="INFO")
+    STATE_MACHINE_LOG_LEVEL: str = Field(default="INFO")
+    UPLOADER_LOG_LEVEL: str = Field(default="INFO")
     CONSOLE_LOG_LEVEL: str = Field(default="INFO")
     URLLIB3_LOG_LEVEL: str = Field(default="WARNING")
     UVICORN_LOG_LEVEL: str = Field(default="WARNING")
-    STATE_MACHINE_LOG_LEVEL: str = Field(default="INFO")
-    UPLOADER_LOG_LEVEL: str = Field(default="INFO")
-    MAIN_LOG_LEVEL: str = Field(default="INFO")
     AZURE_LOG_LEVEL: str = Field(default="WARNING")
 
     LOG_LEVELS: dict = Field(default={})
 
+    REQUIRED_ROLE: str = Field(default="Mission.Control")
+
     @validator("LOG_LEVELS", pre=True, always=True)
     def set_log_levels(cls, v, values) -> dict:
         return {
-            "console": values["CONSOLE_LOG_LEVEL"],
             "api": values["API_LOG_LEVEL"],
-            "urllib3": values["URLLIB3_LOG_LEVEL"],
-            "uvicorn": values["UVICORN_LOG_LEVEL"],
+            "main": values["MAIN_LOG_LEVEL"],
+            "mqtt": values["MQTT_LOG_LEVEL"],
             "state_machine": values["STATE_MACHINE_LOG_LEVEL"],
             "uploader": values["UPLOADER_LOG_LEVEL"],
-            "main": values["MAIN_LOG_LEVEL"],
+            "console": values["CONSOLE_LOG_LEVEL"],
+            "urllib3": values["URLLIB3_LOG_LEVEL"],
+            "uvicorn": values["UVICORN_LOG_LEVEL"],
             "azure": values["AZURE_LOG_LEVEL"],
         }
 
     @validator(
-        "TOPIC_ISAR_ROBOT",
         "TOPIC_ISAR_STATE",
         "TOPIC_ISAR_MISSION",
         "TOPIC_ISAR_TASK",
         "TOPIC_ISAR_STEP",
+        "TOPIC_ISAR_ROBOT_STATUS",
+        "TOPIC_ISAR_ROBOT_INFO",
         pre=True,
         always=True,
     )
@@ -258,6 +304,7 @@ class Settings(BaseSettings):
         case_sensitive = True
 
 
+load_dotenv()
 settings = Settings()
 
 
@@ -272,7 +319,13 @@ class RobotSettings(BaseSettings):
             env_file_path = None
         super().__init__(_env_file=env_file_path)
 
+    # ISAR steps the robot is capable of performing
+    # This should be set in the robot package settings.env file
     CAPABILITIES: List[str] = Field(default=["drive_to_pose", "take_image"])
+
+    # Model of the robot which ISAR is connected to
+    # This should be set in the robot package settings.env file
+    ROBOT_MODEL: RobotModel = Field(default=RobotModel.Robot)  # type: ignore
 
     class Config:
         env_file_encoding = "utf-8"

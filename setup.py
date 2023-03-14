@@ -10,6 +10,11 @@ setup(
     url="https://github.com/equinor/isar",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
+    package_data={
+        "isar": [
+            "config/logging.conf",
+        ]
+    },
     classifiers=[
         "Environment :: Other Environment",
         "Intended Audience :: Developers",
@@ -31,6 +36,9 @@ setup(
         "fastapi-azure-auth",
         "fastapi",
         "injector",
+        "opencensus-ext-logging",
+        "opencensus-ext-requests",
+        "opencensus-ext-azure",
         "numpy",
         "paho-mqtt",
         "pydantic",
@@ -46,16 +54,17 @@ setup(
         "dev": [
             "black",
             "flake8",
+            "mock",
             "mypy",
             "myst-parser",
+            "pre-commit",
             "pytest-dotenv",
             "pytest-mock",
             "pytest-xdist",
             "pytest",
             "requests-mock",
             "sphinx",
-            "pre-commit",
         ]
     },
-    python_requires=">=3.9",
+    python_requires=">=3.8",
 )
